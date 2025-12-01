@@ -6,10 +6,21 @@ import re
 from urllib.parse import urlparse, urljoin, urlunparse
 from typing import Optional, Tuple, Dict, Any
 import validators
-import tldextract
 
-# Configure tldextract to use /tmp for cache (Vercel has read-only filesystem)
-tld_extractor = tldextract.TLDExtract(cache_dir='/tmp/tldextract_cache')
+# Lazy-loaded tldextract to avoid initialization issues on Vercel
+_tld_extractor = None
+
+
+def _get_tld_extractor():
+    """Get or create the TLD extractor with proper cache settings."""
+    global _tld_extractor
+    if _tld_extractor is None:
+        import tldextract
+        _tld_extractor = tldextract.TLDExtract(
+            cache_dir='/tmp/tldextract_cache',
+            fallback_to_snapshot=True
+        )
+    return _tld_extractor
 
 
 def normalize_url(url: str) -> str:
@@ -46,16 +57,28 @@ def is_valid_url(url: str) -> bool:
 
 def get_domain(url: str) -> str:
     """Extract the domain from a URL."""
-    extracted = tld_extractor(url)
-    if extracted.subdomain:
-        return f"{extracted.subdomain}.{extracted.domain}.{extracted.suffix}"
-    return f"{extracted.domain}.{extracted.suffix}"
+    try:
+        extractor = _get_tld_extractor()
+        extracted = extractor(url)
+        if extracted.subdomain:
+            return f"{extracted.subdomain}.{extracted.domain}.{extracted.suffix}"
+        return f"{extracted.domain}.{extracted.suffix}"
+    except Exception:
+        # Fallback: use simple parsing
+        parsed = urlparse(url)
+        return parsed.netloc
 
 
 def get_base_domain(url: str) -> str:
     """Extract the base domain (without subdomain) from a URL."""
-    extracted = tld_extractor(url)
-    return f"{extracted.domain}.{extracted.suffix}"
+    try:
+        extractor = _get_tld_extractor()
+        extracted = extractor(url)
+        return f"{extracted.domain}.{extracted.suffix}"
+    except Exception:
+        # Fallback: use simple parsing
+        parsed = urlparse(url)
+        return parsed.netloc
 
 
 def is_same_domain(url1: str, url2: str) -> bool:
