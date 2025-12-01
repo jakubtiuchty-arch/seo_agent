@@ -7,21 +7,6 @@ from urllib.parse import urlparse, urljoin, urlunparse
 from typing import Optional, Tuple, Dict, Any
 import validators
 
-# Lazy-loaded tldextract to avoid initialization issues on Vercel
-_tld_extractor = None
-
-
-def _get_tld_extractor():
-    """Get or create the TLD extractor with proper cache settings."""
-    global _tld_extractor
-    if _tld_extractor is None:
-        import tldextract
-        _tld_extractor = tldextract.TLDExtract(
-            cache_dir='/tmp/tldextract_cache',
-            fallback_to_snapshot=True
-        )
-    return _tld_extractor
-
 
 def normalize_url(url: str) -> str:
     """Normalize a URL to a standard format."""
@@ -56,29 +41,26 @@ def is_valid_url(url: str) -> bool:
 
 
 def get_domain(url: str) -> str:
-    """Extract the domain from a URL."""
-    try:
-        extractor = _get_tld_extractor()
-        extracted = extractor(url)
-        if extracted.subdomain:
-            return f"{extracted.subdomain}.{extracted.domain}.{extracted.suffix}"
-        return f"{extracted.domain}.{extracted.suffix}"
-    except Exception:
-        # Fallback: use simple parsing
-        parsed = urlparse(url)
-        return parsed.netloc
+    """Extract the domain from a URL using simple parsing."""
+    parsed = urlparse(url)
+    netloc = parsed.netloc.lower()
+    # Remove port if present
+    if ':' in netloc:
+        netloc = netloc.split(':')[0]
+    return netloc
 
 
 def get_base_domain(url: str) -> str:
-    """Extract the base domain (without subdomain) from a URL."""
-    try:
-        extractor = _get_tld_extractor()
-        extracted = extractor(url)
-        return f"{extracted.domain}.{extracted.suffix}"
-    except Exception:
-        # Fallback: use simple parsing
-        parsed = urlparse(url)
-        return parsed.netloc
+    """Extract the base domain from a URL."""
+    domain = get_domain(url)
+    # Simple extraction: take last two parts for most TLDs
+    parts = domain.split('.')
+    if len(parts) >= 2:
+        # Handle common multi-part TLDs like .co.uk
+        if len(parts) >= 3 and parts[-2] in ['co', 'com', 'org', 'net', 'gov', 'edu']:
+            return '.'.join(parts[-3:])
+        return '.'.join(parts[-2:])
+    return domain
 
 
 def is_same_domain(url1: str, url2: str) -> bool:
