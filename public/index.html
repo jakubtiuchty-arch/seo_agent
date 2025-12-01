@@ -1,0 +1,547 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SEO Audit Agent - Technical SEO Analysis Tool</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            min-height: 100vh;
+            color: #fff;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        header {
+            text-align: center;
+            padding: 40px 0;
+        }
+
+        h1 {
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+            background: linear-gradient(90deg, #00d4ff, #7b2cbf);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .subtitle {
+            color: #888;
+            font-size: 1.1rem;
+        }
+
+        .search-box {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 16px;
+            padding: 30px;
+            margin: 20px 0;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .input-group {
+            display: flex;
+            gap: 10px;
+        }
+
+        input[type="url"] {
+            flex: 1;
+            padding: 15px 20px;
+            font-size: 1rem;
+            border: 2px solid rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+            background: rgba(0, 0, 0, 0.3);
+            color: #fff;
+            outline: none;
+            transition: border-color 0.3s;
+        }
+
+        input[type="url"]:focus {
+            border-color: #00d4ff;
+        }
+
+        input[type="url"]::placeholder {
+            color: #666;
+        }
+
+        button {
+            padding: 15px 30px;
+            font-size: 1rem;
+            font-weight: 600;
+            border: none;
+            border-radius: 10px;
+            background: linear-gradient(90deg, #00d4ff, #7b2cbf);
+            color: #fff;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        button:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 30px rgba(0, 212, 255, 0.3);
+        }
+
+        button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
+        .loading {
+            display: none;
+            text-align: center;
+            padding: 40px;
+        }
+
+        .loading.active {
+            display: block;
+        }
+
+        .spinner {
+            width: 50px;
+            height: 50px;
+            border: 4px solid rgba(255, 255, 255, 0.1);
+            border-top-color: #00d4ff;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 20px;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .results {
+            display: none;
+        }
+
+        .results.active {
+            display: block;
+        }
+
+        .score-card {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 16px;
+            padding: 30px;
+            margin: 20px 0;
+            text-align: center;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .score {
+            font-size: 4rem;
+            font-weight: 700;
+            margin: 10px 0;
+        }
+
+        .score.good { color: #00ff88; }
+        .score.medium { color: #ffaa00; }
+        .score.bad { color: #ff4444; }
+
+        .summary-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin: 20px 0;
+        }
+
+        .summary-card {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 12px;
+            padding: 20px;
+            text-align: center;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .summary-card h3 {
+            font-size: 2rem;
+            margin-bottom: 5px;
+        }
+
+        .summary-card.critical h3 { color: #ff4444; }
+        .summary-card.important h3 { color: #ffaa00; }
+        .summary-card.recommended h3 { color: #00d4ff; }
+
+        .issues-section {
+            margin: 30px 0;
+        }
+
+        .section-header {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 20px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .section-header.critical { border-color: #ff4444; }
+        .section-header.important { border-color: #ffaa00; }
+        .section-header.recommended { border-color: #00d4ff; }
+
+        .section-header h2 {
+            font-size: 1.3rem;
+        }
+
+        .badge {
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            font-weight: 600;
+        }
+
+        .badge.critical { background: rgba(255, 68, 68, 0.2); color: #ff4444; }
+        .badge.important { background: rgba(255, 170, 0, 0.2); color: #ffaa00; }
+        .badge.recommended { background: rgba(0, 212, 255, 0.2); color: #00d4ff; }
+
+        .issue-card {
+            background: rgba(255, 255, 255, 0.03);
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 15px;
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            transition: background 0.2s;
+        }
+
+        .issue-card:hover {
+            background: rgba(255, 255, 255, 0.05);
+        }
+
+        .issue-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 15px;
+        }
+
+        .issue-title {
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: #fff;
+        }
+
+        .issue-meta {
+            display: flex;
+            gap: 10px;
+            font-size: 0.85rem;
+            color: #888;
+            margin-top: 5px;
+        }
+
+        .issue-body {
+            color: #aaa;
+            line-height: 1.6;
+        }
+
+        .issue-body p {
+            margin-bottom: 15px;
+        }
+
+        .issue-body strong {
+            color: #fff;
+        }
+
+        .issue-body ul, .issue-body ol {
+            margin-left: 20px;
+            margin-bottom: 15px;
+        }
+
+        .issue-body li {
+            margin-bottom: 5px;
+        }
+
+        .collapsible {
+            cursor: pointer;
+        }
+
+        .collapsible-content {
+            display: none;
+            margin-top: 15px;
+            padding-top: 15px;
+            border-top: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        .collapsible-content.active {
+            display: block;
+        }
+
+        .expand-btn {
+            background: rgba(255, 255, 255, 0.1);
+            border: none;
+            color: #888;
+            padding: 8px 15px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.85rem;
+            transition: background 0.2s;
+        }
+
+        .expand-btn:hover {
+            background: rgba(255, 255, 255, 0.15);
+            color: #fff;
+        }
+
+        .error-message {
+            background: rgba(255, 68, 68, 0.1);
+            border: 1px solid rgba(255, 68, 68, 0.3);
+            border-radius: 12px;
+            padding: 20px;
+            color: #ff6666;
+            text-align: center;
+            margin: 20px 0;
+            display: none;
+        }
+
+        .error-message.active {
+            display: block;
+        }
+
+        footer {
+            text-align: center;
+            padding: 40px 0;
+            color: #666;
+            font-size: 0.9rem;
+        }
+
+        @media (max-width: 768px) {
+            h1 {
+                font-size: 1.8rem;
+            }
+
+            .input-group {
+                flex-direction: column;
+            }
+
+            .score {
+                font-size: 3rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>SEO Audit Agent</h1>
+            <p class="subtitle">Comprehensive Technical SEO Analysis</p>
+        </header>
+
+        <div class="search-box">
+            <form id="auditForm">
+                <div class="input-group">
+                    <input type="url" id="urlInput" placeholder="Enter website URL (e.g., https://example.com)" required>
+                    <button type="submit" id="submitBtn">Analyze</button>
+                </div>
+            </form>
+        </div>
+
+        <div class="loading" id="loading">
+            <div class="spinner"></div>
+            <p>Analyzing website... This may take a moment.</p>
+        </div>
+
+        <div class="error-message" id="errorMessage"></div>
+
+        <div class="results" id="results">
+            <div class="score-card">
+                <p>SEO Score</p>
+                <div class="score" id="score">0</div>
+                <p id="auditUrl"></p>
+            </div>
+
+            <div class="summary-grid">
+                <div class="summary-card critical">
+                    <h3 id="criticalCount">0</h3>
+                    <p>Critical Issues</p>
+                </div>
+                <div class="summary-card important">
+                    <h3 id="importantCount">0</h3>
+                    <p>Important Issues</p>
+                </div>
+                <div class="summary-card recommended">
+                    <h3 id="recommendedCount">0</h3>
+                    <p>Recommendations</p>
+                </div>
+            </div>
+
+            <div id="issuesContainer"></div>
+        </div>
+
+        <footer>
+            <p>SEO Audit Agent v1.0 - Technical SEO Analysis Tool</p>
+        </footer>
+    </div>
+
+    <script>
+        const form = document.getElementById('auditForm');
+        const urlInput = document.getElementById('urlInput');
+        const submitBtn = document.getElementById('submitBtn');
+        const loading = document.getElementById('loading');
+        const results = document.getElementById('results');
+        const errorMessage = document.getElementById('errorMessage');
+
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            const url = urlInput.value.trim();
+            if (!url) return;
+
+            // Reset UI
+            loading.classList.add('active');
+            results.classList.remove('active');
+            errorMessage.classList.remove('active');
+            submitBtn.disabled = true;
+
+            try {
+                const response = await fetch('/api/audit', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ url })
+                });
+
+                const data = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(data.error || 'Failed to analyze website');
+                }
+
+                displayResults(data);
+            } catch (error) {
+                errorMessage.textContent = error.message;
+                errorMessage.classList.add('active');
+            } finally {
+                loading.classList.remove('active');
+                submitBtn.disabled = false;
+            }
+        });
+
+        function displayResults(data) {
+            // Score
+            const score = data.score;
+            const scoreEl = document.getElementById('score');
+            scoreEl.textContent = score;
+            scoreEl.className = 'score ' + (score >= 80 ? 'good' : score >= 50 ? 'medium' : 'bad');
+
+            // URL
+            document.getElementById('auditUrl').textContent = data.url;
+
+            // Summary counts
+            document.getElementById('criticalCount').textContent = data.summary.critical_count;
+            document.getElementById('importantCount').textContent = data.summary.important_count;
+            document.getElementById('recommendedCount').textContent = data.summary.recommended_count;
+
+            // Issues
+            const container = document.getElementById('issuesContainer');
+            container.innerHTML = '';
+
+            if (data.issues.critical.length > 0) {
+                container.appendChild(createIssuesSection('Critical Issues - Fix Immediately', 'critical', data.issues.critical));
+            }
+
+            if (data.issues.important.length > 0) {
+                container.appendChild(createIssuesSection('Important Optimizations - Fix Soon', 'important', data.issues.important));
+            }
+
+            if (data.issues.recommended.length > 0) {
+                container.appendChild(createIssuesSection('Recommended Enhancements', 'recommended', data.issues.recommended));
+            }
+
+            if (data.summary.total_issues === 0) {
+                container.innerHTML = `
+                    <div class="score-card" style="background: rgba(0, 255, 136, 0.1); border-color: rgba(0, 255, 136, 0.3);">
+                        <h2 style="color: #00ff88;">No Issues Found!</h2>
+                        <p style="color: #aaa; margin-top: 10px;">Your page appears to follow SEO best practices. Great job!</p>
+                    </div>
+                `;
+            }
+
+            results.classList.add('active');
+        }
+
+        function createIssuesSection(title, severity, issues) {
+            const section = document.createElement('div');
+            section.className = 'issues-section';
+            section.innerHTML = `
+                <div class="section-header ${severity}">
+                    <h2>${title}</h2>
+                    <span class="badge ${severity}">${issues.length}</span>
+                </div>
+            `;
+
+            issues.forEach((issue, index) => {
+                const card = document.createElement('div');
+                card.className = 'issue-card';
+                card.innerHTML = `
+                    <div class="issue-header">
+                        <div>
+                            <div class="issue-title">${index + 1}. ${escapeHtml(issue.title)}</div>
+                            <div class="issue-meta">
+                                <span>${formatCategory(issue.category)}</span>
+                                <span>Difficulty: ${issue.difficulty}</span>
+                            </div>
+                        </div>
+                        <button class="expand-btn" onclick="toggleDetails(this)">Show Details</button>
+                    </div>
+                    <div class="issue-body">
+                        <p>${escapeHtml(issue.description)}</p>
+                        <div class="collapsible-content">
+                            <p><strong>Why it matters:</strong><br>${escapeHtml(issue.impact)}</p>
+                            ${issue.current_value ? `<p><strong>Current:</strong> ${escapeHtml(issue.current_value)}</p>` : ''}
+                            ${issue.recommended_value ? `<p><strong>Recommended:</strong> ${escapeHtml(issue.recommended_value)}</p>` : ''}
+                            <p><strong>How to fix:</strong></p>
+                            <ol>
+                                ${issue.fix_steps.map(step => `<li>${escapeHtml(step)}</li>`).join('')}
+                            </ol>
+                            <p><strong>Expected outcome:</strong><br>${escapeHtml(issue.expected_outcome)}</p>
+                            <p><strong>How to validate:</strong></p>
+                            <ul>
+                                ${issue.validation_steps.map(step => `<li>${escapeHtml(step)}</li>`).join('')}
+                            </ul>
+                            ${issue.affected_elements && issue.affected_elements.length > 0 ? `
+                                <p><strong>Affected elements:</strong></p>
+                                <ul>
+                                    ${issue.affected_elements.slice(0, 5).map(el => `<li><code>${escapeHtml(el)}</code></li>`).join('')}
+                                    ${issue.affected_elements.length > 5 ? `<li>... and ${issue.affected_elements.length - 5} more</li>` : ''}
+                                </ul>
+                            ` : ''}
+                        </div>
+                    </div>
+                `;
+                section.appendChild(card);
+            });
+
+            return section;
+        }
+
+        function toggleDetails(btn) {
+            const content = btn.closest('.issue-card').querySelector('.collapsible-content');
+            content.classList.toggle('active');
+            btn.textContent = content.classList.contains('active') ? 'Hide Details' : 'Show Details';
+        }
+
+        function formatCategory(category) {
+            return category.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+        }
+
+        function escapeHtml(text) {
+            if (!text) return '';
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+    </script>
+</body>
+</html>
