@@ -8,6 +8,9 @@ from typing import Optional, Tuple, Dict, Any
 import validators
 import tldextract
 
+# Configure tldextract to use /tmp for cache (Vercel has read-only filesystem)
+tld_extractor = tldextract.TLDExtract(cache_dir='/tmp/tldextract_cache')
+
 
 def normalize_url(url: str) -> str:
     """Normalize a URL to a standard format."""
@@ -43,7 +46,7 @@ def is_valid_url(url: str) -> bool:
 
 def get_domain(url: str) -> str:
     """Extract the domain from a URL."""
-    extracted = tldextract.extract(url)
+    extracted = tld_extractor(url)
     if extracted.subdomain:
         return f"{extracted.subdomain}.{extracted.domain}.{extracted.suffix}"
     return f"{extracted.domain}.{extracted.suffix}"
@@ -51,7 +54,7 @@ def get_domain(url: str) -> str:
 
 def get_base_domain(url: str) -> str:
     """Extract the base domain (without subdomain) from a URL."""
-    extracted = tldextract.extract(url)
+    extracted = tld_extractor(url)
     return f"{extracted.domain}.{extracted.suffix}"
 
 
