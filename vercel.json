@@ -6,7 +6,7 @@
       "use": "@vercel/python"
     },
     {
-      "src": "public/**",
+      "src": "index.html",
       "use": "@vercel/static"
     }
   ],
@@ -17,12 +17,7 @@
     },
     {
       "src": "/(.*)",
-      "dest": "/public/$1"
+      "dest": "/index.html"
     }
-  ],
-  "functions": {
-    "api/audit.py": {
-      "maxDuration": 30
-    }
-  }
+  ]
 }
