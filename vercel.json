@@ -19,5 +19,10 @@
       "src": "/(.*)",
       "dest": "/index.html"
     }
-  ]
+  ],
+  "functions": {
+    "api/audit.py": {
+      "maxDuration": 60
+    }
+  }
 }
