@@ -22,7 +22,8 @@
   ],
   "functions": {
     "api/audit.py": {
-      "maxDuration": 60
+      "maxDuration": 60,
+      "memory": 1024
     }
   }
 }
