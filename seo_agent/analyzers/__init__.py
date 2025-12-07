@@ -9,6 +9,8 @@ from .performance import PerformanceAnalyzer
 from .security import SecurityAnalyzer
 from .structured_data import StructuredDataAnalyzer
 from .links import LinkAnalyzer
+from .mobile import MobileAnalyzer
+from .duplicate_content import DuplicateContentAnalyzer
 
 __all__ = [
     "BaseAnalyzer",
@@ -19,4 +21,6 @@ __all__ = [
     "SecurityAnalyzer",
     "StructuredDataAnalyzer",
     "LinkAnalyzer",
+    "MobileAnalyzer",
+    "DuplicateContentAnalyzer",
 ]

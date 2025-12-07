@@ -16,6 +16,8 @@ from .analyzers import (
     SecurityAnalyzer,
     StructuredDataAnalyzer,
     LinkAnalyzer,
+    MobileAnalyzer,
+    DuplicateContentAnalyzer,
 )
 from .report import AuditReport, ReportGenerator
 
@@ -140,6 +142,8 @@ class SEOAuditAgent:
         include_security: bool = True,
         include_structured_data: bool = True,
         include_links: bool = True,
+        include_mobile: bool = True,
+        include_duplicate_content: bool = True,
     ) -> AuditReport:
         """
         Perform a complete SEO audit on a URL.
@@ -233,6 +237,24 @@ class SEOAuditAgent:
 
         if include_links:
             analyzer = LinkAnalyzer(
+                url=final_url,
+                html_content=html_content,
+                response_headers=headers,
+            )
+            result = analyzer.analyze()
+            report.add_result(result)
+
+        if include_mobile:
+            analyzer = MobileAnalyzer(
+                url=final_url,
+                html_content=html_content,
+                response_headers=headers,
+            )
+            result = analyzer.analyze()
+            report.add_result(result)
+
+        if include_duplicate_content:
+            analyzer = DuplicateContentAnalyzer(
                 url=final_url,
                 html_content=html_content,
                 response_headers=headers,

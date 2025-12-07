@@ -41,6 +41,11 @@ class PerformanceAnalyzer(BaseAnalyzer):
             self._check_preload_preconnect()
             self._check_inline_resources()
             self._analyze_resource_hints()
+            # Core Web Vitals specific checks
+            self._check_lcp_elements()
+            self._check_cls_indicators()
+            self._check_fid_indicators()
+            self._check_font_display()
             self.result.success = True
         except Exception as e:
             self.result.success = False
@@ -612,6 +617,298 @@ class PerformanceAnalyzer(BaseAnalyzer):
                     "Check for preconnect hints to font domains",
                     "Verify fonts load early in waterfall"
                 ],
+                difficulty="easy",
+                priority_score=35
+            ))
+
+    def _check_lcp_elements(self) -> None:
+        """Check for potential LCP (Largest Contentful Paint) issues."""
+        images = self.soup.find_all('img')
+
+        # Check for hero images that might be LCP candidates
+        hero_patterns = ['hero', 'banner', 'featured', 'main', 'header-image', 'cover']
+        potential_lcp_images = []
+
+        for img in images:
+            classes = ' '.join(img.get('class', []))
+            img_id = img.get('id', '')
+            src = img.get('src', img.get('data-src', ''))
+
+            is_hero = any(pattern in classes.lower() or pattern in img_id.lower()
+                         for pattern in hero_patterns)
+
+            if is_hero or (src and not img.get('loading') == 'lazy'):
+                potential_lcp_images.append({
+                    'src': src[:80] if src else 'no-src',
+                    'has_fetchpriority': img.get('fetchpriority') == 'high',
+                    'has_srcset': bool(img.get('srcset'))
+                })
+
+        preloaded_images = self.soup.find_all('link', attrs={'rel': 'preload', 'as': 'image'})
+
+        self.result.data['lcp_candidates'] = {
+            'potential_lcp_images': len(potential_lcp_images),
+            'preloaded_images': len(preloaded_images)
+        }
+
+        unoptimized_hero = [img for img in potential_lcp_images
+                          if not img['has_fetchpriority']]
+
+        if unoptimized_hero and len(unoptimized_hero) <= 5:
+            self.result.add_issue(SEOIssue(
+                title="LCP Image May Need Optimization",
+                description=f"Found {len(unoptimized_hero)} potential LCP images without fetchpriority='high'.",
+                severity=IssueSeverity.IMPORTANT,
+                category=IssueCategory.PERFORMANCE,
+                impact="The Largest Contentful Paint (LCP) is a Core Web Vital. Hero images should be prioritized for faster LCP.",
+                fix_steps=[
+                    "Add fetchpriority='high' to your main hero/banner image:",
+                    "  <img src='hero.jpg' fetchpriority='high' alt='...'>",
+                    "Preload the LCP image:",
+                    "  <link rel='preload' as='image' href='hero.jpg'>",
+                    "Avoid lazy loading the LCP image",
+                    "Ensure the image is served in optimal format (WebP/AVIF)"
+                ],
+                expected_outcome="Faster LCP times, improved Core Web Vitals score.",
+                validation_steps=[
+                    "Run PageSpeed Insights and check LCP timing",
+                    "Use Chrome DevTools Performance tab to identify LCP element",
+                    "Target LCP under 2.5 seconds"
+                ],
+                recommended_value="fetchpriority='high' on LCP image",
+                affected_elements=[img['src'] for img in unoptimized_hero[:5]],
+                difficulty="easy",
+                priority_score=70
+            ))
+
+    def _check_cls_indicators(self) -> None:
+        """Check for potential CLS (Cumulative Layout Shift) issues."""
+        images = self.soup.find_all('img')
+        images_without_dims = []
+
+        for img in images:
+            if not (img.get('width') and img.get('height')):
+                src = img.get('src', img.get('data-src', ''))[:80]
+                if src:
+                    images_without_dims.append(src)
+
+        # Check for dynamic content injection points (ads)
+        ads_patterns = ['ad-', 'advertisement', 'banner', 'promo', 'sponsor']
+        potential_ad_slots = []
+        for element in self.soup.find_all(['div', 'section', 'aside']):
+            classes = ' '.join(element.get('class', [])).lower()
+            element_id = (element.get('id') or '').lower()
+            if any(pattern in classes or pattern in element_id for pattern in ads_patterns):
+                potential_ad_slots.append(element.name)
+
+        self.result.data['cls_indicators'] = {
+            'images_without_dimensions': len(images_without_dims),
+            'potential_ad_slots': len(potential_ad_slots)
+        }
+
+        if images_without_dims:
+            self.result.add_issue(SEOIssue(
+                title="Images Causing Layout Shift Risk",
+                description=f"{len(images_without_dims)} images lack width/height attributes, risking layout shifts.",
+                severity=IssueSeverity.IMPORTANT,
+                category=IssueCategory.PERFORMANCE,
+                impact="Images without dimensions cause layout shifts (CLS) when they load, hurting Core Web Vitals.",
+                fix_steps=[
+                    "Add width and height attributes to all img tags",
+                    "Use the image's natural aspect ratio dimensions",
+                    "Example: <img src='photo.jpg' width='800' height='600'>",
+                    "CSS can still control display size with max-width: 100%",
+                    "For responsive images, use CSS aspect-ratio property"
+                ],
+                expected_outcome="Zero or minimal CLS from images, improved Core Web Vitals.",
+                validation_steps=[
+                    "Run PageSpeed Insights and check CLS score",
+                    "Use Chrome DevTools to identify layout shifts",
+                    "Target CLS under 0.1"
+                ],
+                current_value=f"{len(images_without_dims)} images without dimensions",
+                recommended_value="All images should have width/height",
+                affected_elements=images_without_dims[:10],
+                difficulty="medium",
+                priority_score=65
+            ))
+
+        if potential_ad_slots:
+            self.result.add_issue(SEOIssue(
+                title="Ad Slots May Cause Layout Shifts",
+                description=f"Found {len(potential_ad_slots)} potential ad containers that may inject content.",
+                severity=IssueSeverity.RECOMMENDED,
+                category=IssueCategory.PERFORMANCE,
+                impact="Dynamically loaded ads often cause significant layout shifts if space isn't reserved.",
+                fix_steps=[
+                    "Reserve space for ads with min-height CSS",
+                    "Use CSS aspect-ratio to maintain ad slot dimensions",
+                    "Example: .ad-slot { min-height: 250px; }",
+                    "Consider using CSS contain: layout for ad containers"
+                ],
+                expected_outcome="Reduced layout shifts from ad loading.",
+                validation_steps=[
+                    "Monitor CLS in real user monitoring",
+                    "Verify ad containers have reserved space"
+                ],
+                difficulty="medium",
+                priority_score=45
+            ))
+
+    def _check_fid_indicators(self) -> None:
+        """Check for potential FID (First Input Delay) / INP issues."""
+        scripts = self.soup.find_all('script')
+        external_scripts = [s for s in scripts if s.get('src')]
+        inline_scripts = [s for s in scripts if not s.get('src') and s.string]
+
+        total_inline_js = sum(len(s.string) for s in inline_scripts if s.string)
+
+        # Check for heavy third-party scripts
+        heavy_third_parties = {
+            'analytics': ['google-analytics.com', 'googletagmanager.com'],
+            'social': ['facebook.net', 'twitter.com', 'linkedin.com'],
+            'ads': ['googlesyndication.com', 'doubleclick.net'],
+            'chat': ['intercom', 'drift', 'zendesk', 'crisp'],
+            'tracking': ['hotjar', 'fullstory', 'clarity']
+        }
+
+        found_third_parties = {category: [] for category in heavy_third_parties}
+
+        for script in external_scripts:
+            src = script.get('src', '').lower()
+            for category, patterns in heavy_third_parties.items():
+                if any(pattern in src for pattern in patterns):
+                    found_third_parties[category].append(src[:60])
+
+        total_third_party = sum(len(v) for v in found_third_parties.values())
+
+        self.result.data['fid_indicators'] = {
+            'total_scripts': len(scripts),
+            'external_scripts': len(external_scripts),
+            'inline_js_size': total_inline_js,
+            'third_party_count': total_third_party
+        }
+
+        if total_third_party > 5:
+            all_third_party = []
+            for scripts_list in found_third_parties.values():
+                all_third_party.extend(scripts_list[:2])
+
+            self.result.add_issue(SEOIssue(
+                title="Heavy Third-Party Script Usage",
+                description=f"Found {total_third_party} third-party scripts that may impact interactivity.",
+                severity=IssueSeverity.IMPORTANT,
+                category=IssueCategory.PERFORMANCE,
+                impact="Third-party scripts compete for the main thread, increasing First Input Delay (FID) and Interaction to Next Paint (INP).",
+                fix_steps=[
+                    "Audit third-party scripts for necessity",
+                    "Load non-critical scripts asynchronously or defer them",
+                    "Use resource hints: <link rel='preconnect'>",
+                    "Consider lazy loading widgets (chat, social) on interaction",
+                    "Implement facade patterns for heavy embeds"
+                ],
+                expected_outcome="Faster interactivity (FID/INP) and better responsiveness.",
+                validation_steps=[
+                    "Run PageSpeed Insights and check TBT/FID",
+                    "Use Chrome DevTools Performance tab",
+                    "Monitor real user INP in Search Console"
+                ],
+                current_value=f"{total_third_party} third-party scripts",
+                affected_elements=all_third_party[:6],
+                difficulty="medium",
+                priority_score=60
+            ))
+
+        if total_inline_js > 50000:
+            self.result.add_issue(SEOIssue(
+                title="Large Inline JavaScript Blocking Main Thread",
+                description=f"Found {format_bytes(total_inline_js)} of inline JavaScript that blocks parsing.",
+                severity=IssueSeverity.IMPORTANT,
+                category=IssueCategory.PERFORMANCE,
+                impact="Large inline scripts block HTML parsing and delay interactivity.",
+                fix_steps=[
+                    "Move inline JavaScript to external files",
+                    "Use defer or async for external scripts",
+                    "Code-split to load only necessary JS initially",
+                    "Use web workers for heavy computations"
+                ],
+                expected_outcome="Faster time to interactive and improved FID/INP.",
+                validation_steps=[
+                    "Check Total Blocking Time in Lighthouse",
+                    "Profile with DevTools Performance tab"
+                ],
+                current_value=format_bytes(total_inline_js),
+                difficulty="hard",
+                priority_score=55
+            ))
+
+    def _check_font_display(self) -> None:
+        """Check for font-display optimization."""
+        style_tags = self.soup.find_all('style')
+        has_font_face = False
+        has_font_display_swap = False
+
+        for style in style_tags:
+            content = style.get_text()
+            if '@font-face' in content:
+                has_font_face = True
+                if 'font-display' in content:
+                    has_font_display_swap = True
+
+        font_links = self.soup.find_all('link', attrs={'rel': 'stylesheet'})
+        google_fonts_links = [link.get('href', '') for link in font_links
+                             if 'fonts.googleapis.com' in link.get('href', '')]
+
+        google_fonts_with_display = [link for link in google_fonts_links if 'display=' in link]
+
+        self.result.data['font_display'] = {
+            'has_font_face': has_font_face,
+            'has_font_display': has_font_display_swap,
+            'google_fonts_count': len(google_fonts_links),
+            'google_fonts_with_display': len(google_fonts_with_display)
+        }
+
+        if google_fonts_links and len(google_fonts_with_display) < len(google_fonts_links):
+            missing_display = len(google_fonts_links) - len(google_fonts_with_display)
+            self.result.add_issue(SEOIssue(
+                title="Google Fonts Missing display Parameter",
+                description=f"{missing_display} Google Fonts link(s) missing the display=swap parameter.",
+                severity=IssueSeverity.RECOMMENDED,
+                category=IssueCategory.PERFORMANCE,
+                impact="Without font-display: swap, text may be invisible while fonts load (FOIT), hurting LCP.",
+                fix_steps=[
+                    "Add &display=swap to your Google Fonts URL",
+                    "Example: https://fonts.googleapis.com/css2?family=Roboto&display=swap",
+                    "Or self-host fonts with font-display: swap in @font-face"
+                ],
+                expected_outcome="Text visible immediately with fallback font, no invisible text period.",
+                validation_steps=[
+                    "Check Google Fonts URLs for display parameter",
+                    "Throttle network and verify text is visible during load"
+                ],
+                current_value=f"{missing_display} fonts without display=swap",
+                difficulty="easy",
+                priority_score=40
+            ))
+
+        if has_font_face and not has_font_display_swap:
+            self.result.add_issue(SEOIssue(
+                title="Custom Fonts Missing font-display",
+                description="@font-face declarations found without font-display property.",
+                severity=IssueSeverity.RECOMMENDED,
+                category=IssueCategory.PERFORMANCE,
+                impact="Without font-display, browsers may hide text while loading fonts (FOIT).",
+                fix_steps=[
+                    "Add font-display: swap to all @font-face rules",
+                    "Example: @font-face { font-family: 'MyFont'; font-display: swap; src: url(...); }",
+                    "Consider font-display: optional for non-critical fonts"
+                ],
+                expected_outcome="Text visible immediately with fallback fonts during font loading.",
+                validation_steps=[
+                    "Review @font-face declarations for font-display",
+                    "Test with slow network throttling"
+                ],
+                recommended_value="font-display: swap",
                 difficulty="easy",
                 priority_score=35
             ))
